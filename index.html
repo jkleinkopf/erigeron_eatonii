@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Erigeron eatonii — GBIF occurrences</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+  :root {
+    --bg: #fbfbfd;
+    --surface: #ffffff;
+    --line: #e8e8ee;
+    --line-strong: #d9d9e3;
+    --ink: #1c1c22;
+    --ink-soft: #55555f;
+    --ink-muted: #7a7a86;
+    --accent: #4f46e5;
+    --accent-soft: rgba(79, 70, 229, .10);
+    --radius: 10px;
+    --font: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #app { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
+
+  /* ---------------- left panel ---------------- */
+  #panel {
+    width: 30%;
+    min-width: 290px;
+    max-width: 440px;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    border-right: 1px solid var(--line);
+  }
+
+  #controls {
+    padding: 16px 16px 18px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  #controls h1 {
+    font-size: 15px;
+    margin: 0 0 14px;
+    font-weight: 600;
+    letter-spacing: -0.012em;
+  }
+  #controls label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    margin: 11px 0 5px;
+  }
+  #controls select {
+    width: 100%;
+    padding: 8px 10px;
+    font-family: var(--font);
+    font-size: 13px;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    transition: border-color .12s, box-shadow .12s;
+  }
+  #controls select:hover:not(:disabled) { border-color: #b9b9c8; }
+  #controls select:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  #controls select:disabled { background: #f4f4f7; color: #a5a5b0; }
+
+  #status { margin-top: 13px; font-size: 12px; color: var(--ink-muted); }
+  #status.error { color: #b00020; }
+
+  /* ---------------- detail panel ---------------- */
+  #detail { flex: 1 1 auto; overflow-y: auto; padding: 0; }
+
+  .detail-card {
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    overflow: hidden;
+  }
+
+  /* media block is now on top, full width */
+  .detail-media {
+    background: #f4f4f7;
+    border-bottom: 1px solid var(--line);
+  }
+  .detail-media a { display: block; }
+  .detail-media img {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: #f4f4f7;
+  }
+
+  .detail-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 140px;
+    padding: 30px 16px;
+    text-align: center;
+    font-size: 12px;
+    font-style: italic;
+    color: var(--ink-muted);
+  }
+
+  /* text block below the image */
+  .detail-body { padding: 14px 16px 16px; }
+  .detail-name {
+    font-size: 14.5px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    margin: 0 0 2px;
+    word-break: break-word;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .name-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    box-shadow: inset 0 0 0 1px rgba(17, 24, 39, .38);
+    transform: translateY(-1px);
+  }
+  .detail-sub {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin: 0 0 12px;
+  }
+  .detail-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12.5px;
+  }
+  .detail-table th {
+    text-align: left;
+    color: var(--ink-muted);
+    font-weight: 500;
+    padding: 4px 12px 4px 0;
+    white-space: nowrap;
+    vertical-align: top;
+    width: 38%;
+  }
+  .detail-table td { padding: 4px 0; word-break: break-word; }
+  .detail-table tr + tr th,
+  .detail-table tr + tr td { border-top: 1px solid #f2f2f6; }
+
+  .detail-link {
+    display: inline-block;
+    margin-top: 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    text-decoration: none;
+    word-break: break-word;
+  }
+  .detail-link:hover { text-decoration: underline; }
+
+  .empty {
+    color: var(--ink-muted);
+    font-size: 12.5px;
+    text-align: center;
+    padding: 30px 14px;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  /* ---------------- map ---------------- */
+  #map { flex: 1 1 auto; min-width: 0; height: 100%; }
+  .leaflet-container { font-family: var(--font); font-size: 12px; }
+
+  /* ---------------- legend ---------------- */
+  .legend {
+    background: var(--surface);
+    padding: 11px 13px 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 2px 14px rgba(28, 28, 34, .14);
+    font-size: 12px;
+    line-height: 1.4;
+    max-height: 44vh;
+    max-width: 240px;
+    overflow: auto;
+    color: var(--ink);
+  }
+  .legend-title {
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: .01em;
+    color: var(--ink-soft);
+    margin-bottom: 7px;
+  }
+  .legend-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+  .legend-row.dim { opacity: .28; }
+  .legend-swatch {
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    box-shadow: inset 0 0 0 1px rgba(17, 24, 39, .35);
+  }
+  .legend-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ---------------- image filter control (top-right) ---------------- */
+  .img-filter {
+    background: var(--surface);
+    padding: 9px 10px 10px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 2px 14px rgba(28, 28, 34, .14);
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .img-filter-label {
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: .01em;
+    color: var(--ink-soft);
+    margin-bottom: 7px;
+  }
+  .img-filter-btns { display: flex; gap: 4px; }
+  .img-filter-btns button {
+    font-family: var(--font);
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    background: #f4f4f7;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    padding: 5px 9px;
+    cursor: pointer;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .img-filter-btns button:hover { background: #ececf1; }
+  .img-filter-btns button.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: rgba(79, 70, 229, .35);
+  }
+  .img-filter-btns button:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+
+  /* ---------------- leaflet tooltip ---------------- */
+  .leaflet-tooltip.spec-tip {
+    border: none;
+    border-radius: 7px;
+    background: rgba(28, 28, 34, .93);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 9px;
+    box-shadow: 0 2px 10px rgba(28, 28, 34, .3);
+  }
+  .leaflet-tooltip.spec-tip::before { display: none; }
+  .tip-dot {
+    display: inline-block;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    margin-right: 7px;
+    vertical-align: baseline;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .45);
+  }
+</style>
+</head>
+
+<body>
+<div id="app">
+
+  <aside id="panel">
+    <div id="controls">
+      <h1>Erigeron eatonii — GBIF records</h1>
+
+      <label for="colorBy">Color points by</label>
+      <select id="colorBy" disabled>
+        <option value="scientificName">scientificName</option>
+        <option value="proposedName">proposedName</option>
+      </select>
+
+      <label for="speciesFilter">Show taxon</label>
+      <select id="speciesFilter" disabled></select>
+
+      <div id="status">Loading…</div>
+    </div>
+
+    <div id="detail">
+      <p class="empty">Click a point on the map to see specimen details.</p>
+    </div>
+  </aside>
+
+  <div id="map"></div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script type="module">
+/* ==================================================================
+   hyparquet — reads the .parquet file directly in the browser
+   ================================================================== */
+import { parquetReadObjects } from 'https://cdn.jsdelivr.net/npm/hyparquet@1/+esm';
+
+/* ------------------------------------------------------------------ config */
+const PARQUET_URL =
+  new URLSearchParams(location.search).get('file') || 'erigeron_eatonii.parquet';
+
+const POINT_RADIUS    = 6;
+const POINT_RADIUS_HL = 11;
+
+const BASE_STYLE = {
+  radius: POINT_RADIUS,
+  weight: 1,
+  color: 'rgba(17, 24, 39, .55)',
+  fillOpacity: 0.92
+};
+
+/* GBIF endpoints (CORS-enabled, no key required) */
+const gbifOccurrence = id => 'https://api.gbif.org/v1/occurrence/' + encodeURIComponent(id);
+const gbifRecordPage = id => 'https://www.gbif.org/occurrence/' + encodeURIComponent(id);
+const gbifImageProxy = url => 'https://api.gbif.org/v1/image/unsafe/' + encodeURIComponent(url);
+
+/* ------------------------------------------------------------------ dom */
+const colorBySel  = document.getElementById('colorBy');
+const speciesSel  = document.getElementById('speciesFilter');
+const statusEl    = document.getElementById('status');
+const detailEl    = document.getElementById('detail');
+
+/* ------------------------------------------------------------------ map */
+const map = L.map('map', {
+  preferCanvas: true,
+  renderer: L.canvas({ padding: 0.5 }),
+  minZoom: 2,
+  maxZoom: 18,
+  worldCopyJump: true
+}).setView([40, -115], 4);
+
+map.attributionControl.setPosition('bottomleft');
+L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);
+
+const pointLayer = L.layerGroup().addTo(map);
+
+const hoverTip = L.tooltip({ direction: 'top', offset: [0, -11], opacity: 1, className: 'spec-tip' });
+
+/* ------------------------------------------------------------------ legend */
+const legend = L.control({ position: 'bottomright' });
+legend.onAdd = function () {
+  const div = L.DomUtil.create('div', 'legend');
+  L.DomEvent.disableClickPropagation(div);
+  L.DomEvent.disableScrollPropagation(div);
+  return div;
+};
+legend.addTo(map);
+
+/* ------------------------------------------------------------------ image filter control */
+let imageFilter = 'all';        // 'all' | 'yes' | 'no'
+
+const imageFilterControl = L.control({ position: 'topright' });
+imageFilterControl.onAdd = function () {
+  const div = L.DomUtil.create('div', 'img-filter');
+  L.DomEvent.disableClickPropagation(div);
+  L.DomEvent.disableScrollPropagation(div);
+
+  div.innerHTML =
+    '<div class="img-filter-label">Specimen images</div>' +
+    '<div class="img-filter-btns">' +
+      '<button type="button" data-filter="all" class="active">All</button>' +
+      '<button type="button" data-filter="yes">With image</button>' +
+      '<button type="button" data-filter="no">Without image</button>' +
+    '</div>';
+
+  div.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      imageFilter = btn.dataset.filter;
+      div.querySelectorAll('button')
+         .forEach(b => b.classList.toggle('active', b === btn));
+      applyFilter();
+    });
+  });
+
+  return div;
+};
+imageFilterControl.addTo(map);
+
+/* ------------------------------------------------------------------ state */
+let ROWS = [];
+let visibleRows = [];
+let COLOR_MAPS = { scientificName: new Map(), proposedName: new Map() };
+let currentField = 'scientificName';
+let selectedRow = null;
+let selectedMarker = null;
+let detailToken = 0;
+
+/* ==================================================================
+   colour-blind friendly categorical palette (Okabe–Ito)
+   ================================================================== */
+const CB_PALETTE = [
+  '#E69F00', '#56B4E9', '#009E73', '#0072B2',
+  '#D55E00', '#CC79A7', '#F0E442', '#666666'
+];
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [n >> 16 & 255, n >> 8 & 255, n & 255];
+}
+function rgbToHex([r, g, b]) {
+  return '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+}
+function mixHex(a, b, t) {
+  const A = hexToRgb(a), B = hexToRgb(b);
+  return rgbToHex([0, 1, 2].map(i => A[i] + (B[i] - A[i]) * t));
+}
+function paletteColor(i) {
+  const base  = CB_PALETTE[i % CB_PALETTE.length];
+  const cycle = Math.floor(i / CB_PALETTE.length);
+  if (cycle === 0) return base;
+  if (cycle % 2 === 1) return mixHex(base, '#111827', Math.min(0.28 * cycle, 0.5));
+  return mixHex(base, '#ffffff', 0.42);
+}
+
+/* ==================================================================
+   helpers
+   ================================================================== */
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => (
+  { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]
+));
+
+function str(v) {
+  if (v == null) return '';
+  if (Array.isArray(v)) v = v.find(x => x != null) ?? '';
+  if (v == null) return '';
+  return String(v);
+}
+function toNum(v) {
+  if (v == null) return NaN;
+  if (typeof v === 'bigint') return Number(v);
+  if (typeof v === 'number') return v;
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+const IMAGE_KEYS = ['mediaIdentifier', 'associatedMedia', 'identifier', 'mediaType'];
+function pickImage(r) {
+  for (const key of IMAGE_KEYS) {
+    let v = r[key];
+    if (Array.isArray(v)) v = v.find(x => typeof x === 'string' && /^https?:\/\//i.test(x));
+    if (typeof v === 'string' && /^https?:\/\//i.test(v.trim())) return v.trim();
+  }
+  return '';
+}
+
+function buildColorMap(field) {
+  const values = [...new Set(ROWS.map(r => r[field] || 'Unknown'))]
+    .sort((a, b) => a.localeCompare(b));
+  const m = new Map();
+  values.forEach((v, i) => m.set(v, paletteColor(i)));
+  return m;
+}
+function colorFor(row) {
+  const m = COLOR_MAPS[currentField];
+  return (m && m.get(row[currentField] || 'Unknown')) || '#888';
+}
+function baseStyle(row) {
+  return { ...BASE_STYLE, fillColor: colorFor(row) };
+}
+
+/* image availability — resolved URL, else the download's mediaType hint */
+function hasImage(row) {
+  if (row.imageUrl) return true;             // resolved and found
+  if (row.imageUrl === null) return false;   // resolved, none found
+  return row.hasMediaHint;                   // not yet resolved
+}
+
+/* ==================================================================
+   lazy image resolution (GBIF occurrence API, cached per gbifID)
+   ================================================================== */
+const MEDIA_CACHE = new Map();          // gbifID -> Promise<string|null>
+
+async function fetchMediaFromGbif(gbifID) {
+  try {
+    const res = await fetch(gbifOccurrence(gbifID), { headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const list = Array.isArray(json.media) ? json.media
+               : Array.isArray(json.results) ? json.results
+               : [];
+    for (const m of list) {
+      const u = m.identifier || m.references || m.thumbnailUrl;
+      if (typeof u === 'string' && /^https?:\/\//i.test(u)) return u;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveImage(row) {
+  if (row.imageUrl !== undefined) return Promise.resolve(row.imageUrl);
+  if (!row.gbifID) { row.imageUrl = null; return Promise.resolve(null); }
+
+  let p = MEDIA_CACHE.get(row.gbifID);
+  if (!p) {
+    p = fetchMediaFromGbif(row.gbifID);
+    MEDIA_CACHE.set(row.gbifID, p);
+  }
+  return p.then(url => {
+    row.imageUrl = url || null;
+    return row.imageUrl;
+  });
+}
+
+/* one retry against GBIF's image cache, then give up */
+function wireImageFallback(img, url, onFinalFail) {
+  if (!url) return;
+  if (url.startsWith('https://api.gbif.org/v1/image/unsafe/')) {
+    img.addEventListener('error', () => onFinalFail?.(), { once: true });
+    return;
+  }
+  let triedProxy = false;
+  img.addEventListener('error', () => {
+    if (!triedProxy) {
+      triedProxy = true;
+      img.src = gbifImageProxy(url);
+    } else {
+      onFinalFail?.();
+    }
+  });
+}
+
+/* ==================================================================
+   selection state
+   ================================================================== */
+function setSelectedMarker(marker) {
+  if (selectedMarker === marker) return;
+  if (selectedMarker) selectedMarker.setStyle(baseStyle(selectedMarker.row));
+  selectedMarker = marker;
+  if (selectedMarker && selectedMarker._map) {
+    selectedMarker.setStyle({
+      radius: POINT_RADIUS_HL,
+      weight: 3,
+      color: '#111827',
+      fillOpacity: 1
+    });
+    selectedMarker.bringToFront();
+  }
+}
+
+/* ==================================================================
+   detail panel rendering — image on top, text below
+   ================================================================== */
+function renderDetail(row) {
+  /* ---- media block first (full width) ---- */
+  let media;
+  if (row.imageUrl) {
+    const url = escapeHtml(row.imageUrl);
+    media =
+      `<div class="detail-media"><a href="${url}" target="_blank" rel="noopener" ` +
+      `title="Open full-size image">` +
+      `<img src="${url}" referrerpolicy="no-referrer" ` +
+      `alt="Specimen ${escapeHtml(row.catalogNumber || row.scientificName || '')}"></a></div>`;
+  } else if (row.imageUrl === undefined) {
+    media = '<div class="detail-media detail-placeholder">Loading image…</div>';
+  } else {
+    media = '<div class="detail-media detail-placeholder">No specimen image available</div>';
+  }
+
+  /* ---- formatted field values ---- */
+  const coords = (Number.isFinite(row.lat) && Number.isFinite(row.lon))
+    ? `${row.lat.toFixed(5)}, ${row.lon.toFixed(5)}`
+    : '';
+
+  const elevation = Number.isFinite(row.elevation)
+    ? `${row.elevation.toLocaleString()} m`
+    : '';
+
+  const year = Number.isFinite(row.year) ? String(Math.round(row.year)) : '';
+
+  const fields = [
+    ['Scientific name',  row.scientificName],
+    ['Proposed name',    row.proposedName],
+    ['State / province', row.stateProvince],
+    ['Coordinates',      coords],
+    ['Elevation',        elevation],
+    ['Year collected',   year],
+    ['Recorded by',      row.recordedBy],
+    ['Record number',    row.recordNumber],
+    ['Herbarium',        row.herbarium],
+    ['Catalog number',   row.catalogNumber]
+  ].filter(([, v]) => v !== '' && v != null);
+
+  const table = fields.length
+    ? '<table class="detail-table">' +
+      fields.map(([k, v]) => `<tr><th>${k}</th><td>${escapeHtml(v)}</td></tr>`).join('') +
+      '</table>'
+    : '';
+
+  let link = '';
+  if (row.gbifID) {
+    const href = escapeHtml(gbifRecordPage(row.gbifID));
+    link = `<a class="detail-link" href="${href}" target="_blank" rel="noopener">` +
+           `View record on GBIF (${escapeHtml(row.gbifID)}) ↗</a>`;
+  }
+
+  const body =
+    '<div class="detail-body">' +
+      `<div class="detail-name">` +
+        `<span class="name-dot" style="background:${colorFor(row)}"></span>` +
+        `${escapeHtml(row.scientificName || '—')}` +
+      `</div>` +
+      `<div class="detail-sub">${escapeHtml(row.herbarium || '')}` +
+        `${row.catalogNumber ? (row.herbarium ? ' · ' : '') + escapeHtml(row.catalogNumber) : ''}</div>` +
+      table +
+      link +
+    '</div>';
+
+  return '<div class="detail-card">' + media + body + '</div>';
+}
+
+function wireDetailImage(row) {
+  const img = detailEl.querySelector('.detail-media img');
+  if (!img || !row.imageUrl) return;
+  wireImageFallback(img, row.imageUrl, () => {
+    const media = detailEl.querySelector('.detail-media');
+    if (!media) return;
+    media.classList.add('detail-placeholder');
+    media.innerHTML = 'No specimen image available';
+  });
+}
+
+async function showDetail(row) {
+  const token = ++detailToken;
+
+  selectedRow = row;
+  setSelectedMarker(row.marker);
+
+  detailEl.innerHTML = renderDetail(row);
+  detailEl.scrollTop = 0;
+  wireDetailImage(row);
+
+  if (row.imageUrl === undefined) {
+    await resolveImage(row);
+    if (token !== detailToken) return;
+    detailEl.innerHTML = renderDetail(row);
+    wireDetailImage(row);
+  }
+}
+
+function clearDetail() {
+  detailToken++;
+  selectedRow = null;
+  setSelectedMarker(null);
+  detailEl.innerHTML =
+    '<p class="empty">Click a point on the map to see specimen details.</p>';
+}
+
+/* ==================================================================
+   marker construction
+   ================================================================== */
+function makeMarker(row) {
+  const marker = L.circleMarker([row.lat, row.lon], baseStyle(row));
+  marker.row = row;
+
+  marker.on('mouseover', () => {
+    map.getContainer().style.cursor = 'pointer';
+    hoverTip.setLatLng(marker.getLatLng())
+            .setContent(
+              `<span class="tip-dot" style="background:${colorFor(row)}"></span>` +
+              `${escapeHtml(row[currentField] || 'Unknown')}`
+            )
+            .openOn(map);
+  });
+
+  marker.on('mouseout', () => {
+    map.getContainer().style.cursor = '';
+    map.closeTooltip(hoverTip);
+  });
+
+  marker.on('click', () => showDetail(row));
+
+  return marker;
+}
+
+/* ==================================================================
+   filtering / rendering the map
+   ================================================================== */
+function populateSpeciesSelect() {
+  const values = [...COLOR_MAPS[currentField].keys()];
+  const previous = speciesSel.value;
+
+  speciesSel.innerHTML = '';
+  speciesSel.add(new Option(`All taxa (${values.length})`, '__all__'));
+  values.forEach(v => speciesSel.add(new Option(v, v)));
+
+  speciesSel.value = values.includes(previous) ? previous : '__all__';
+}
+
+function updateLegend() {
+  const div = legend.getContainer();
+  if (!div) return;
+
+  const cmap = COLOR_MAPS[currentField];
+  if (!cmap || !cmap.size) { div.style.display = 'none'; return; }
+  div.style.display = '';
+
+  const selected = speciesSel.value;
+  let html = `<div class="legend-title">Colored by ${escapeHtml(currentField)}</div>`;
+
+  for (const [name, color] of cmap) {
+    const dim = selected !== '__all__' && selected !== name;
+    html += `<div class="legend-row${dim ? ' dim' : ''}">` +
+            `<span class="legend-swatch" style="background:${color}"></span>` +
+            `<span class="legend-label" title="${escapeHtml(name)}">${escapeHtml(name)}</span>` +
+            `</div>`;
+  }
+  div.innerHTML = html;
+}
+
+function applyFilter() {
+  const selected = speciesSel.value;
+
+  visibleRows = ROWS.filter(r => {
+    if (selected !== '__all__' && (r[currentField] || 'Unknown') !== selected) return false;
+    if (imageFilter === 'yes' && !hasImage(r)) return false;
+    if (imageFilter === 'no'  &&  hasImage(r)) return false;
+    return true;
+  });
+
+  pointLayer.clearLayers();
+  for (const row of visibleRows) pointLayer.addLayer(row.marker);
+
+  statusEl.classList.remove('error');
+  statusEl.textContent =
+    `${visibleRows.length.toLocaleString()} of ${ROWS.length.toLocaleString()} records shown`;
+
+  updateLegend();
+
+  if (selectedRow && !visibleRows.includes(selectedRow)) {
+    clearDetail();
+  }
+}
+
+/* ==================================================================
+   control wiring
+   ================================================================== */
+colorBySel.addEventListener('change', () => {
+  currentField = colorBySel.value;
+  ROWS.forEach(r => r.marker.setStyle(baseStyle(r)));
+  if (selectedMarker && selectedMarker._map) {
+    selectedMarker.setStyle({
+      radius: POINT_RADIUS_HL,
+      weight: 3,
+      color: '#111827',
+      fillOpacity: 1
+    });
+  }
+  populateSpeciesSelect();
+  applyFilter();
+});
+
+speciesSel.addEventListener('change', applyFilter);
+
+/* ==================================================================
+   load the parquet file
+   ================================================================== */
+async function load() {
+  try {
+    statusEl.textContent = 'Downloading parquet…';
+
+    const response = await fetch(PARQUET_URL);
+    if (!response.ok) throw new Error(`HTTP ${response.status} — ${PARQUET_URL}`);
+    const buffer = await response.arrayBuffer();
+
+    let compressors;
+    try {
+      ({ compressors } = await import('https://cdn.jsdelivr.net/npm/hyparquet-compressors@1/+esm'));
+    } catch (err) {
+      console.warn('hyparquet-compressors not available (snappy still works):', err);
+    }
+
+    statusEl.textContent = 'Parsing parquet…';
+    const raw = await parquetReadObjects({ file: buffer, compressors });
+
+    ROWS = [];
+    for (const r of raw) {
+      const lat = toNum(r.decimalLatitude);
+      const lon = toNum(r.decimalLongitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+
+      ROWS.push({
+        idx: ROWS.length,
+        scientificName: str(r.scientificName),
+        proposedName:   str(r.proposedName),
+        year:           toNum(r.year),
+        lat, lon,
+        stateProvince:  str(r.stateProvince),
+        elevation:      toNum(r.elevation),
+        recordedBy:     str(r.recordedBy),
+        recordNumber:   str(r.recordNumber),
+        herbarium:      str(r.herbarium),
+        catalogNumber:  str(r.catalogNumber),
+        gbifID:         str(r.gbifID),
+        hasMediaHint:   Boolean(str(r.mediaType)),     // "StillImage" etc. ⇒ likely has a photo
+        imageUrl:       pickImage(r) || undefined      // undefined = not yet looked up
+      });
+    }
+
+    if (!ROWS.length) throw new Error('No records with valid coordinates found in the file.');
+
+    COLOR_MAPS = {
+      scientificName: buildColorMap('scientificName'),
+      proposedName:   buildColorMap('proposedName')
+    };
+
+    pointLayer.clearLayers();
+    for (const row of ROWS) row.marker = makeMarker(row);
+
+    colorBySel.disabled = false;
+    speciesSel.disabled = false;
+
+    currentField = colorBySel.value;
+    populateSpeciesSelect();
+    applyFilter();
+
+    map.fitBounds(L.latLngBounds(ROWS.map(r => [r.lat, r.lon])),
+                  { padding: [25, 25], maxZoom: 12 });
+
+    updateLegend();
+  } catch (err) {
+    console.error(err);
+    statusEl.classList.add('error');
+    statusEl.textContent = 'Could not load data: ' + err.message;
+    detailEl.innerHTML =
+      '<p class="empty">Serve this page from a local web server ' +
+      '(e.g. <code>python -m http.server</code>) so the browser can fetch the ' +
+      'parquet file, and make sure <code>erigeron_eatonii.parquet</code> sits next to this HTML ' +
+      '— or pass <code>?file=path/to/file.parquet</code> in the URL.</p>';
+  }
+}
+
+load();
+</script>
+</body>
+</html>
